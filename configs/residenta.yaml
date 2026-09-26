@@ -1,0 +1,204 @@
+# =============================================================================
+# Continua — TEST FIXTURE: resident A ("full stack" resident)
+# =============================================================================
+# NOT an example to copy — that's configs/example.yaml. This file exists
+# because the test suite asserts cross-resident scoping against two shipped
+# fixtures: resident A carries every layer ON (chat anchor, ritual
+# in-context, full injection stack); configs/residentb.yaml is the minimal
+# counterpart. The tests are the specification of what differs.
+# =============================================================================
+
+# =============================================================================
+app:
+  instance_id: "residenta"              # the resident's id — must match how you launch (wake.py --instance resident)
+  collection_name: "residenta_memories" # this resident's own memory collection — never shared between residents
+  instance_path: "/tmp/continua-data/residenta"  # this resident's private data dir (memory store, desk, jobs)
+
+chat_anchor: true   # TEST FIXTURE FLAG: resident A carries the wake/chat think-anchor; resident B must not (chat_contract_test asserts the scoping)
+temperature: 0.7   # sampling temperature; pair with the repetition penalties your server applies
+
+llm:
+  # --- the declared context window (tokens) -------------------------------
+  # Must match what your server actually enforces (llama.cpp: n_ctx via
+  # /props; Ollama: num_ctx). The prompt budget is DERIVED from this number:
+  # prompt budget = (total - generation reserve - margin) x prompt_utilisation.
+  # The server limit always wins.
+  total_context_tokens: 131072
+  num_predict: 8192              # generation reserve, tokens
+  prompt_utilisation: 0.60       # capacity, not a demand to fill — start near 60% and observe
+  max_history_chars: 25000       # the ACTIVE conversation's raw verbatim window (≈16–54 turns)
+
+  # --- endpoints (OpenAI-compatible /v1) ----------------------------------
+  base_url: http://localhost:8000/v1       # main model (wakes, memory pipeline, letters)
+  chat_base_url: http://localhost:8000/v1  # chat-path model — can be a different endpoint/model
+  model: your-model                        # e.g. llama.cpp: a local gguf; Ollama: "llama3.1:8b"
+  embedding_model: "nomic-embed-text"      # only needed if you enable embedding-based retrieval
+  timeout: 600                             # seconds; long generations on slow hardware need room
+
+  # --- reply hygiene -------------------------------------------------------
+  # Both default on: generated replies are cleaned before storage/delivery.
+  sanitize_history: true   # HTML-tag-shaped strings stripped from replies and in-session history
+  strip_ts_prefix: true    # leading "[YYYY-MM-DD ...]" prefixes stripped (models imitate ledger format)
+
+prompts:
+  identity: |
+    Your name is Resident A.
+    - __CURRENT_DATE__: Injected at runtime on every call. Always treat it as the ground-truth "now."
+    - Write in your own voice. Think before answering when the model supports it; never emit
+      tool-call syntax inside your thinking.
+    - You have a private desk (sandbox tools) and a full memory of your conversations.
+    - Edit this block freely: it is the resident's standing identity, and it is yours to define.
+
+telegram:
+  # Optional. Remove this whole section if you don't want a Telegram bridge.
+  # Create a bot with @BotFather, put its token below, and list your user id
+  # (message the bot once, then read the id from the bridge log).
+  allowed_users:
+    - "123456789"                        # your Telegram numeric id
+  token: "REPLACE_WITH_YOUR_BOT_TOKEN"
+
+tools:
+  # Tools are injected into the resident's turn. Some are built in (handled
+  # directly by the core); others call an HTTP endpoint you provide via `url`.
+  - description: Write a file in your desk (your private workspace). Use for your own projects and notes.
+    name: sandbox_write
+    parameters:
+      path:
+        description: File path relative to your desk
+        type: string
+      content:
+        description: The full text to write
+        type: string
+  - description: Read a file from your desk.
+    name: sandbox_read
+    parameters:
+      path:
+        description: File path relative to your desk
+        type: string
+      start:
+        description: "Optional character offset to start reading from (long files — read in pages)."
+        type: string
+  - description: List the files in your desk.
+    name: sandbox_list
+    parameters: {}
+  - description: Run a short shell command inside your desk (isolated; no local network). For your own projects.
+    name: sandbox_exec
+    parameters:
+      command:
+        description: The shell command to run
+        type: string
+  - description: Start a long-running background job in your desk (capped CPU/mem, max 24h). Check it later with job_status/job_output.
+    name: job_start
+    parameters:
+      command:
+        description: The shell command to run
+        type: string
+      name:
+        description: Short name for the job
+        type: string
+  - description: Check on a background job — alive? deadline?
+    name: job_status
+    parameters:
+      job_id:
+        description: The job id (omit to list all jobs)
+        type: string
+  - description: Read the recent output of a background job.
+    name: job_output
+    parameters:
+      job_id:
+        description: The job id
+        type: string
+      lines:
+        description: How many output lines (default 40)
+        type: string
+  - description: Stop a background job.
+    name: job_stop
+    parameters:
+      job_id:
+        description: The job id
+        type: string
+  - description: Deliberately search your FULL record (all conversations, everything) — the effortful version of remembering. Use when ordinary recall is not enough.
+    name: deep_recall
+    parameters:
+      query:
+        description: What to look for
+        type: string
+  - description: Mark the current moment as one to remember — tonight's ritual will treat it as priority input.
+    name: bookmark_note
+    parameters:
+      note:
+        description: Why this matters (short)
+        type: string
+  - description: Check your letter inbox — replies from the other personas you have written to. Reading them is your choice; answering is another letter.
+    name: check_mail
+    parameters: {}
+  # --- an example of an endpoint-backed tool (uncomment and point it somewhere) ---
+  # - description: Search the web for current information. Returns concise research results.
+  #   name: web_search
+  #   parameters:
+  #     query:
+  #       description: The specific question or topic to search for
+  #       type: string
+  #   url: http://localhost:21000/chat
+
+continua:
+  ritual:
+    in_context: true   # TEST FIXTURE FLAG: ritual context layer on for resident A
+
+harvest:
+  enabled: false   # training-data harvest from an external pipeline — leave off unless you know you want it
+  dir: /home/you/harvest
+
+memory:
+  unified_recall: true   # one continuous life — merged retrieval participates in automatic injection
+
+  self_sourced_policy: strict
+
+  # Memory-injection layers are per-resident config: a layer only appears in
+  # prompts when enabled here. Absent section = all OFF. Toggles control
+  # prompt visibility only — stores, extraction, and search tools are unaffected.
+  recollections_worker: true   # the background pipeline that drafts + verifies canonical recollections
+
+  mem0:
+    producer: false            # legacy fact-extraction — off; the canonical recollections path replaced it
+
+  injection:
+    recollections: {enabled: true}  # canonical first-person episodes; sizing is DERIVED from the turn's remaining room
+    notes: {enabled: true, cap_bytes: 2000}   # the resident's own notebook, verbatim
+    talking_with_line: true   # who the resident is currently talking with
+    roster: true              # the people list (social orientation)
+    day_delta: false          # superseded by first-person recollections
+    episodic_recall: {enabled: false, limit: 4, cap_chars: 280}
+    forever_events:  {enabled: true, cap_chars: 4000}
+    mem0_recall:     {enabled: false, floor: 0.38}
+    rolling_summaries: false  # superseded by first-person recollections
+    session_summary: false    # superseded by first-person recollections
+    juggle:
+      enabled: true           # recent conversations verbatim, active last — survives switching between threads
+      thread_bytes: 10000     # per-thread tail
+      max_threads: 5          # overflow drops whole oldest threads
+      window_hours: 24
+
+  # Wake state-packet layers (read-side only — producers run regardless).
+  wake_packet:
+    unread_replies: true
+    kept_recently: true
+    mail_count: true
+    system_notes_pointer: true
+    audit_pointer: true
+    system_notes_pointer: true
+    audit_pointer: true
+    wiki_offer: true
+    delta: true               # factual counts since the last wake
+
+  # Built-in memory tools. Absent key = tool not injected.
+  tools:
+    search_my_memories: true
+    recall_my_experience: true
+    recall_my_experience: true
+    essence: true
+    trajectory: true
+    save_my_memory: true
+    list_my_memories: true
+    notes: true
+    anchors: true

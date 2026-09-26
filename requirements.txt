@@ -1,0 +1,5 @@
+PyYAML>=6.0
+httpx>=0.24
+requests>=2.31
+python-telegram-bot>=21.0
+openai>=1.30

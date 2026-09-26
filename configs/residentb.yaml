@@ -1,0 +1,67 @@
+# =============================================================================
+# Continua — TEST FIXTURE: resident B ("minimal" resident)
+# =============================================================================
+# The counterpart to configs/residenta.yaml: every optional layer OFF or
+# absent. Tests assert that nothing resident-A-only leaks into resident B's
+# prompt (e.g. the chat anchor is scoped per config — its key must not
+# appear in this file at all).
+# =============================================================================
+
+app:
+  instance_id: "residentb"
+  collection_name: "residentb_memories"
+  instance_path: "/tmp/continua-data/residentb"
+
+temperature: 0.7
+
+llm:
+  total_context_tokens: 131072
+  num_predict: 8192
+  prompt_utilisation: 0.60
+  max_history_chars: 25000
+  base_url: http://localhost:8000/v1
+  chat_base_url: http://localhost:8000/v1
+  model: your-model
+  timeout: 600
+  sanitize_history: true
+  strip_ts_prefix: true
+
+prompts:
+  identity: |
+    Your name is Resident B.
+
+memory:
+  unified_recall: true
+  self_sourced_policy: strict
+  recollections_worker: true
+  mem0:
+    producer: false
+  injection:
+    recollections: {enabled: false}
+    notes: {enabled: false, cap_bytes: 2000}
+    talking_with_line: true
+    roster: true
+    forever_events:  {enabled: true, cap_chars: 4000}
+    juggle:
+      enabled: true
+      thread_bytes: 10000
+      max_threads: 5
+      window_hours: 24
+  wake_packet:
+    unread_replies: true
+    kept_recently: true
+    mail_count: true
+    system_notes_pointer: true
+    audit_pointer: true
+    wiki_offer: true
+    delta: true
+  tools:
+    search_my_memories: true
+    recall_my_experience: true
+    recall_my_experience: true
+    essence: true
+    trajectory: true
+    save_my_memory: true
+    list_my_memories: true
+    notes: true
+    anchors: true

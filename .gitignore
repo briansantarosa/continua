@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Residents' memory and desks — data, not code (house convention: untracked)
+chronicle/
+sandbox/home/
+agents/
+
+# Runtime
+logs/
+*.log
+
+# Secrets & local env — never tracked
+.env*
+!*.env.example
+
+# LLM debug mirrors (runtime, rewritten on every call — llm_debug.py)
+residenta-debug.md
+residentb-debug.md
+*-debug.md
+
+# Private recollection sources, drafts and review artifacts
+recollections/
+
+# Runtime data, not code. wakes/ and index/ hold thousands of wake files
+# and a store rewritten on every ingest; implementation diffs stay reviewable
+# without them. Tracked on purpose: nothing — code only, by convention.
+wakes/
+index/
+histories/
+summaries/
+outbound/
+mail/
+forensics/
+
+# Notes + job state (runtime data, not code)
+notes/
+jobs/
+
+# Pre-change snapshots (git history replaces snapshot discipline)
+*.bak
+*-pre-*
