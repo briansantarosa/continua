@@ -6,6 +6,16 @@ import jobs as jb
 
 class TestJobs(unittest.TestCase):
     def setUp(self):
+        # the transient units run as a dedicated sandbox user with
+        # passwordless sudo + bwrap (see jobs.py); without that provisioning
+        # these tests cannot run — skip with instructions instead of failing
+        import pwd as _pwd
+        try:
+            _pwd.getpwnam("continua")
+        except KeyError:
+            self.skipTest("background jobs need provisioning: a dedicated "
+                          "sandbox user ('continua'), passwordless sudo, and "
+                          "bwrap — see jobs.py's module docstring")
         self.tmp = tempfile.mkdtemp()
         self.old_jobs, self.old_logs, self.old_desk = (jb.JOBS_DIR,
             jb.LOG_DIR, jb.DESK_ROOT)
