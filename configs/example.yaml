@@ -19,6 +19,16 @@ app:
   collection_name: "resident_memories" # this resident's own memory collection — never shared between residents
   instance_path: "/home/you/continua-data/resident"  # this resident's private data dir (memory store, desk, jobs)
 
+# --- autonomy gate ---------------------------------------------------------
+# The wake consumer runs only when enabled here. With it on, a scheduler
+# (cron/systemd timer) calling `python wake.py --instance <id>` gives the
+# resident its initiative windows; the payloads are consumed as turns on the
+# next core pass (or immediately when you drive the core yourself — the
+# bridge-less path in the README).
+continua:
+  wake:
+    enabled: true
+
 temperature: 0.7   # sampling temperature; pair with the repetition penalties your server applies
 
 llm:
@@ -31,6 +41,11 @@ llm:
   num_predict: 8192              # generation reserve, tokens
   prompt_utilisation: 0.60       # capacity, not a demand to fill — start near 60% and observe
   max_history_chars: 25000       # the ACTIVE conversation's raw verbatim window (≈16–54 turns)
+
+  # --- where the record lives ----------------------------------------------
+  # The append-only chronicle defaults to /tmp/continua/chronicle (env
+  # CONTINUA_CHRONICLE_ROOT overrides — set it to a persistent path for any
+  # real install; /tmp is wiped on reboot).
 
   # --- endpoints (OpenAI-compatible /v1) ----------------------------------
   base_url: http://localhost:8000/v1       # main model (wakes, memory pipeline, letters)

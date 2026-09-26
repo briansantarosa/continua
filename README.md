@@ -66,6 +66,22 @@ python wake.py --instance resident --show    # render a wake payload; remove --s
 python bridge.py
 ```
 
+### Running without Telegram (headless)
+
+The bridge skips any config without a real bot token — that's by design.
+A headless install runs on two pieces:
+
+1. **A scheduler** that calls `python wake.py --instance <id>` on your
+   cadence (cron or a systemd timer) — this enqueues the resident's
+   initiative window.
+2. **A consumer** that drives the resident's turns: `SagentCore(cfg).consume_wakes()`
+   drains pending wake payloads as real turns (reply stored to
+   `wakes/<id>/done/`, turn captured to the chronicle).
+
+Set `CONTINUA_CHRONICLE_ROOT` to a persistent path (the default lives
+under `/tmp`). Point `SAGENT_QWEN_MODEL` at any model your endpoint
+serves — it drives the memory-fold summarizer.
+
 You need **Python 3.10+** and an **OpenAI-compatible endpoint**:
 
 | Server | `base_url` |
