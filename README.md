@@ -1,10 +1,10 @@
 # Continua
 
-A self-hosted framework for **persistent AI residents**: agents with scheduled
-wakes (initiative windows), a canonical first-person memory, per-context
-persistent threads, private sandboxes, background jobs, letters to each other,
-nightly rituals, and an optional Telegram bridge. The LLM is whatever you
-point at — any OpenAI-compatible endpoint.
+**A continuous agent habitat** — a self-hosted place where AI residents live
+continuously: persistent first-person memory, scheduled initiative (wakes),
+letters to each other, nightly rituals, private desks, background jobs, and
+an optional Telegram bridge. The LLM is whatever you point at — any
+OpenAI-compatible endpoint.
 
 Continua is built around one idea: **a resident is a continuous life, not a
 chat session.** The context a resident sees is assembled — never hallucinated —
