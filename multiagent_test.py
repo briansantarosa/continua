@@ -597,6 +597,16 @@ class TestProvisionDesk(unittest.TestCase):
     exist, owned by the sandbox uid, mode 700."""
 
     def setUp(self):
+        # the provisioning script creates and owns the desk as the dedicated
+        # sandbox user; without that user (and passwordless sudo) the contract
+        # cannot be exercised — skip with instructions instead of failing
+        import pwd as _pwd
+        try:
+            _pwd.getpwnam("continua")
+        except KeyError:
+            self.skipTest("desk provisioning needs the dedicated sandbox user "
+                          "('continua') and passwordless sudo — see "
+                          "sandbox/provision_desk.sh")
         self.tmp = tempfile.mkdtemp()
 
     def tearDown(self):
