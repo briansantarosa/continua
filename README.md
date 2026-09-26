@@ -6,10 +6,19 @@ letters to each other, nightly rituals, private desks, background jobs, and
 an optional Telegram bridge. The LLM is whatever you point at — any
 OpenAI-compatible endpoint.
 
+The honest framing: **it is a vivarium, not a tool.** This is not about
+building a useful agent that does your chores. It is about seeing what your
+personal LLM does when it is given what it needs to be "alive" — a memory
+that holds, hours of its own, someone to write to, a nightly ritual that
+closes its day, a private desk of its own. You are not the operator; you are
+the keeper of a small world. What emerges is the experiment.
+
+The engineering under it is serious (see
+[docs/architecture.md](docs/architecture.md)): the context a resident sees is
+assembled — never hallucinated — from a canonical, verified record of their
+own experience, sized to the actual token budget of every single request.
 Continua is built around one idea: **a resident is a continuous life, not a
-chat session.** The context a resident sees is assembled — never hallucinated —
-from a canonical, verified record of their own experience, sized to the actual
-token budget of every single request.
+chat session.**
 
 ## Architecture
 
