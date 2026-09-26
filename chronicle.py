@@ -62,7 +62,10 @@ import re
 logger = logging.getLogger("continua.chronicle")
 
 SCHEMA_VERSION = 1
-DEFAULT_ROOT = "/tmp/continua/chronicle"
+# CONTINUA_CHRONICLE_ROOT overrides the record root — set it to a
+# persistent path for any real install (the default lives under /tmp)
+DEFAULT_ROOT = os.getenv("CONTINUA_CHRONICLE_ROOT",
+                         "/tmp/continua/chronicle")
 
 _TERMINATORS = ".!?…。！？"
 # Closing wrappers that may legally follow a terminator (quotes, brackets,
