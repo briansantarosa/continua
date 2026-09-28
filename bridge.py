@@ -197,9 +197,9 @@ _user_semaphores: Dict[str, asyncio.Semaphore] = {}
 # not serialize (defeating the per-user ordering rule).
 _user_semaphores_init_lock = threading.Lock()
 
-# Module-level handle to the SearchEra subprocess so the reaper loop
+# Module-level handle to the Searchie subprocess so the reaper loop
 # (_keep_alive) can monitor and restart it. See fixes.md #18.
-_searchera_proc: "asyncio.subprocess.Process | None" = None
+_searchie_proc: "asyncio.subprocess.Process | None" = None
 
 
 def _get_user_semaphore(history_key: str) -> asyncio.Semaphore:
@@ -314,7 +314,7 @@ for _h in logging.getLogger().handlers:
     ))
 # Silence httpx INFO logs: python-telegram-bot's long-poll getUpdates fires every
 # 5s per bot and produces ~24 lines/min/bot of pure noise. Our own bridge-level
-# logger already covers anything we care about (LLM calls, searchera calls, user
+# logger already covers anything we care about (LLM calls, searchie calls, user
 # messages, errors). HTTPX WARNING/ERROR still surfaces if something breaks.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -1565,7 +1565,7 @@ async def _run_agent_turn(
         # description. Unknown tool names fall through to a generic
         # phrase so a misconfigured YAML never crashes the bridge.
         tool_friendly = {
-            "search_searchera": "searching the web",
+            "search_searchie": "searching the web",
             "tarot_draw":       "drawing a tarot card",
         }
 
@@ -2230,18 +2230,18 @@ async def _run_one_bot(app, filename: str):
 async def main():
     """
     Discovers configuration profiles using the nested format mappings and binds long-polling.
-    Also starts SearchEra API server if available.
+    Also starts Searchie API server if available.
 
     Each bot runs in its own asyncio task via _run_one_bot(); one bot crash does
-    not affect the others. The reaper (_keep_alive) supervises SearchEra in
+    not affect the others. The reaper (_keep_alive) supervises Searchie in
     parallel. See fixes.md #19.
     """
     logger.info("Starting Sagent Bridge Orchestrator Initialization...")
 
-    # [CONTINUA] (2026-09-07, house ruling): SearchEra start PULLED — Sagent
-    # owns the SearchEra service on port 21000; this bridge only consumes it
-    # via the search_searchera tool (http://localhost:21000/chat).
-    # await _start_searchera_server()
+    # [CONTINUA] (2026-09-07, house ruling): Searchie start PULLED — Sagent
+    # owns the Searchie service on port 21000; this bridge only consumes it
+    # via the search_searchie tool (http://localhost:21000/chat).
+    # await _start_searchie_server()
 
     config_pattern = os.path.join(CONFIG_DIR, "*.yaml")
     config_files = glob.glob(config_pattern)
@@ -2250,9 +2250,9 @@ async def main():
         logger.critical(f"No configuration templates found inside: {CONFIG_DIR}. Halting bridge setup.")
         return
 
-    # --- Start SearchEra API server (if available) ---------------------------
-    # [CONTINUA] PULLED — Sagent owns SearchEra (port 21000); consume only.
-    # await _start_searchera_server()
+    # --- Start Searchie API server (if available) ---------------------------
+    # [CONTINUA] PULLED — Sagent owns Searchie (port 21000); consume only.
+    # await _start_searchie_server()
 
     # --- Initialize each bot in its own task ---------------------------------
     bot_tasks = []
@@ -2345,12 +2345,12 @@ async def main():
 
     # --- Supervisor loop -----------------------------------------------------
     # [CONTINUA] (2026-09-07, house ruling): ALL auxiliary service starts are
-    # pulled out of Continua — Sagent owns SearchEra (port 21000 + reaper),
+    # pulled out of Continua — Sagent owns Searchie (port 21000 + reaper),
     # the control server (nightly writeback endpoint), and the P3
     # consolidation loop. Continua runs ONLY her bot tasks (+ her mem0
     # warmup, which is hers). The forked functions remain defined below but
     # are never started from this process.
-    # reaper_task = asyncio.create_task(_keep_alive(), name="searchera-reaper")
+    # reaper_task = asyncio.create_task(_keep_alive(), name="searchie-reaper")
 
     # P3 (sagentv3.md Upgrade 3): idle-time consolidation loop. Disabled by
     # default; enable with SAGENT_CONSOLIDATE_INTERVAL_S (e.g. 3600). Runs
@@ -2694,15 +2694,15 @@ async def main():
             logger.warning(f"Error stopping Mem0 workers: {e}")
 
 
-async def _launch_searchera():
-    """Launch the SearchEra subprocess; return the process handle.
+async def _launch_searchie():
+    """Launch the Searchie subprocess; return the process handle.
 
     Raises FileNotFoundError if the server script is missing, or any
     other exception on launch failure. Used by both initial startup
     and the reaper's restart loop in `_keep_alive()`. See fixes.md #18.
     """
     SERVER_SCRIPT = os.path.join(
-        BASE_DIR, "..", "searchera", "server.py"
+        BASE_DIR, "..", "searchie", "server.py"
     )
     SERVER_SCRIPT = os.path.normpath(SERVER_SCRIPT)
 
@@ -2711,21 +2711,21 @@ async def _launch_searchera():
     )
 
     if not os.path.isfile(SERVER_SCRIPT):
-        raise FileNotFoundError(f"SearchEra server script not found at {SERVER_SCRIPT}")
+        raise FileNotFoundError(f"Searchie server script not found at {SERVER_SCRIPT}")
 
     # Use the venv python so uvicorn/fastapi are available
     venv_python = VENV_PYTHON if os.path.isfile(VENV_PYTHON) else "python3"
 
     # CRITICAL: Strip PYTHONPATH from environment. The Hermes sandbox injects
     # hermes-agent's Python 3.11 site-packages into PYTHONPATH, which causes
-    # pydantic_core ABI mismatches (ModuleNotFoundError) when the searchera venv
+    # pydantic_core ABI mismatches (ModuleNotFoundError) when the searchie venv
     # (Python 3.12) tries to import its own pydantic from a different ABI.
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
-    env["SEARCHERA_HOST"] = "0.0.0.0"
-    env["SEARCHERA_PORT"] = "21000"
+    env["SEARCHIE_HOST"] = "0.0.0.0"
+    env["SEARCHIE_PORT"] = "21000"
 
-    # SearchEra performs its own durable logging via the SEARCHERA_LOG_FILE
+    # Searchie performs its own durable logging via the SEARCHIE_LOG_FILE
     # handler configured in server.py, so we discard stdout/stderr here
     # rather than capturing them a second time. Using DEVNULL (not PIPE)
     # avoids the OS pipe-buffer deadlock noted in fixes.md #22.
@@ -2737,31 +2737,31 @@ async def _launch_searchera():
     )
 
 
-async def _start_searchera_server():
-    """Start SearchEra FastAPI server as a background process on localhost:21000 if available.
+async def _start_searchie_server():
+    """Start Searchie FastAPI server as a background process on localhost:21000 if available.
 
-    Stores the handle in module-level `_searchera_proc` so the reaper loop in
+    Stores the handle in module-level `_searchie_proc` so the reaper loop in
     `_keep_alive()` can monitor and restart it. See fixes.md #18.
 
-    If port 21000 is already serving a healthy SearchEra (e.g. started
+    If port 21000 is already serving a healthy Searchie (e.g. started
     externally, or still alive from a previous bridge instance), we skip
-    the launch entirely and leave `_searchera_proc = None`. The reaper
+    the launch entirely and leave `_searchie_proc = None`. The reaper
     loop no-ops on that state — the externally-owned process is left
     alone, and we don't collide on the bind. Without this, the reaper
     would spin every 30s launching a process that immediately fails to
-    bind, flooding searchera.log with bind errors.
+    bind, flooding searchie.log with bind errors.
     """
-    global _searchera_proc
+    global _searchie_proc
 
     # Auto-skip: probe /health on port 21000 before spawning. If it
-    # answers 200, SearchEra is already up; return without launching
-    # or registering _searchera_proc.
+    # answers 200, Searchie is already up; return without launching
+    # or registering _searchie_proc.
     try:
         async with httpx.AsyncClient(timeout=1.5) as _probe:
             _probe_resp = await _probe.get("http://localhost:21000/health")
         if _probe_resp.status_code == 200:
             logger.info(
-                "SearchEra already serving on http://localhost:21000 (healthy) "
+                "Searchie already serving on http://localhost:21000 (healthy) "
                 "— not launching our own. Reaper will leave the external "
                 "process alone. To force a fresh spawn, stop the existing "
                 "process and restart this bridge."
@@ -2769,65 +2769,65 @@ async def _start_searchera_server():
             return
         # Non-200: something else is bound. Log and continue — our
         # subprocess will fail to bind and the error will surface in
-        # searchera.log.
+        # searchie.log.
         logger.warning(
-            "SearchEra port 21000 answered HTTP %s on /health — will still "
+            "Searchie port 21000 answered HTTP %s on /health — will still "
             "attempt spawn (expect bind failure).", _probe_resp.status_code
         )
     except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError):
         pass  # port free or service unresponsive — fall through and try to launch
     except Exception as e:
-        logger.warning("[SearchEra] pre-launch probe failed unexpectedly: %s", e)
+        logger.warning("[Searchie] pre-launch probe failed unexpectedly: %s", e)
 
     try:
-        _searchera_proc = await _launch_searchera()
-        logger.info("SearchEra API server launched (PID %d) on port 21000.", _searchera_proc.pid)
+        _searchie_proc = await _launch_searchie()
+        logger.info("Searchie API server launched (PID %d) on port 21000.", _searchie_proc.pid)
     except FileNotFoundError as e:
         logger.info("%s — skipping API launch.", e)
     except Exception as e:
-        logger.error("Failed to start SearchEra API server: %s", e, exc_info=True)
+        logger.error("Failed to start Searchie API server: %s", e, exc_info=True)
 
 
 async def _keep_alive():
-    """Background supervisor — polls SearchEra PID and restarts on crash.
+    """Background supervisor — polls Searchie PID and restarts on crash.
 
-    Polls every 30 seconds. If `_searchera_proc` has exited (returncode is not
+    Polls every 30 seconds. If `_searchie_proc` has exited (returncode is not
     None), attempts up to 3 restarts with exponential-ish backoff (5s, 10s, 15s).
     If all 3 fail, logs and continues — the next tick will retry. See fixes.md #18.
     """
-    global _searchera_proc
+    global _searchie_proc
     while True:
         await asyncio.sleep(30)
 
-        if _searchera_proc is None:
-            continue  # SearchEra was never started; nothing to monitor
+        if _searchie_proc is None:
+            continue  # Searchie was never started; nothing to monitor
 
-        if _searchera_proc.returncode is None:
+        if _searchie_proc.returncode is None:
             continue  # still running
 
         # Process exited; attempt restart with exponential-ish backoff
         logger.warning(
-            "SearchEra subprocess died (PID %d, exit code %s). Attempting restart.",
-            _searchera_proc.pid, _searchera_proc.returncode,
+            "Searchie subprocess died (PID %d, exit code %s). Attempting restart.",
+            _searchie_proc.pid, _searchie_proc.returncode,
         )
 
         restarted = False
         for attempt in range(3):
             backoff = 5 * (attempt + 1)
-            logger.info("[Reaper] Retrying SearchEra startup (attempt %d/3, waiting %ds)...", attempt + 1, backoff)
+            logger.info("[Reaper] Retrying Searchie startup (attempt %d/3, waiting %ds)...", attempt + 1, backoff)
             await asyncio.sleep(backoff)
             try:
-                _searchera_proc = await _launch_searchera()
-                logger.info("[Reaper] SearchEra restarted (PID %d).", _searchera_proc.pid)
+                _searchie_proc = await _launch_searchie()
+                logger.info("[Reaper] Searchie restarted (PID %d).", _searchie_proc.pid)
                 await asyncio.sleep(15)  # allow startup window before next health check
                 restarted = True
                 break
             except Exception as e:
-                logger.error("[Reaper] SearchEra restart attempt %d failed: %s", attempt + 1, e)
+                logger.error("[Reaper] Searchie restart attempt %d failed: %s", attempt + 1, e)
 
         if not restarted:
             logger.error(
-                "[Reaper] SearchEra could not be recovered after 3 attempts. "
+                "[Reaper] Searchie could not be recovered after 3 attempts. "
                 "Tool will remain inactive; reaper will retry on next tick."
             )
 

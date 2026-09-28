@@ -1,9 +1,9 @@
 #!/bin/bash
 # Restart script for the Continua bridge (systemd user unit).
 # Continua-scoped (2026-09-15): manages ONLY what continua needs —
-# no SearchEra, Newsie, Tarot, or other fleet services. Modeled on
+# no Searchie, Newsie, Tarot, or other fleet services. Modeled on
 # /home/you/Sagent/restart.sh, stripped to continua's own teardown,
-# cleanup, and start. The bridge spawns its own SearchEra child, which
+# cleanup, and start. The bridge spawns its own Searchie child, which
 # dies and returns with the bridge — it is never managed separately here.
 #
 # Baked-in lessons:

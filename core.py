@@ -168,7 +168,7 @@ def _loop_end_marker(reason: str, speech_delivered: bool) -> str:
 # anything that writes or reaches out counts against the budget.
 _LOOP_FREE_TOOLS = frozenset({
     "search_my_memories", "list_my_memories", "deep_recall",
-    "search_searchera", "sandbox_list", "sandbox_read",
+    "search_searchie", "sandbox_list", "sandbox_read",
     "check_mail", "job_status", "job_output", "read_my_ledger",
 })
 
@@ -684,7 +684,7 @@ _TOOL_PRIMARY = {
     "send_message": "text",
     "search_my_memories": "query",
     "deep_recall": "query",
-    "search_searchera": "query",
+    "search_searchie": "query",
     "list_my_memories": "source",
 }
 
@@ -735,7 +735,7 @@ def _invoke_tool_from_response(response_text, function_calling_enabled=True):
     
     Supports formats:
     1. <call></call>
-    2. {"name": "search_searchera", "arguments": {"query": "..."}}
+    2. {"name": "search_searchie", "arguments": {"query": "..."}}
     """
     if not function_calling_enabled:
         return None
@@ -897,7 +897,7 @@ def _is_tool_error(result_text: str) -> bool:
 
     All failure modes in _execute_function_call return a string that starts
     with one of a small set of prefixes ("No results returned",
-    "Failed to execute", "[Tool error:", "Empty result from SearchEra.").
+    "Failed to execute", "[Tool error:", "Empty result from Searchie.").
     Anything else is treated as useful data the model should consume. This
     is the basis for tracking whether the tool loop actually got data,
     which the fallback in generate_response uses to choose between
@@ -911,7 +911,7 @@ def _is_tool_error(result_text: str) -> bool:
         "No results returned",
         "Failed to execute",
         "[Tool error:",
-        "Empty result from SearchEra.",
+        "Empty result from Searchie.",
     ))
 
 
@@ -1423,19 +1423,19 @@ def _dump_unclosed_think(user_id, content: str, prompt, eval_count,
         return ""
 
 
-class SearchEraClient:
-    """HTTP client for calling the local SearchEra API on port 21000."""
+class SearchieClient:
+    """HTTP client for calling the local Searchie API on port 21000."""
 
     def __init__(self, url=None):
-        self.base_url = url or os.getenv("SEARCHERA_URL", "http://localhost:21000")
+        self.base_url = url or os.getenv("SEARCHIE_URL", "http://localhost:21000")
 
     async def search_async(self, query: str) -> dict:
         """Hit /chat and return the JSON payload (consolidated_facts + critical_links)."""
         try:
-            # 180 s budget: SearchEra's full pipeline (financial data + 3 web
+            # 180 s budget: Searchie's full pipeline (financial data + 3 web
             # sweeps in parallel: Wikipedia, Tavily, Exa) routinely takes
             # 45-70 s for financial/news queries, and the previous 45 s
-            # timeout was firing before SearchEra finished, leaving the
+            # timeout was firing before Searchie finished, leaving the
             # model with error messages and a confused user. The OpenAI
             # client itself uses 300 s, so 180 s stays safely under that.
             async with httpx.AsyncClient(timeout=180.0) as session:
@@ -1445,14 +1445,14 @@ class SearchEraClient:
                 )
                 resp.raise_for_status()
                 payload = resp.json()
-                logger.info("[SearchEra] Received %d facts for '%s'", len(payload.get("consolidated_facts", [])), query[:80])
+                logger.info("[Searchie] Received %d facts for '%s'", len(payload.get("consolidated_facts", [])), query[:80])
                 return payload
         except httpx.ReadTimeout:
-            logger.error("[SearchEra] Timeout for query: %s", query[:80])
-            return {"error": "SearchEra timed out (180 s). Try a narrower query."}
+            logger.error("[Searchie] Timeout for query: %s", query[:80])
+            return {"error": "Searchie timed out (180 s). Try a narrower query."}
         except Exception as exc:
-            logger.warning("[SearchEra] HTTP error during search: %s", exc)
-            return {"error": f"SearchEra connection failed: {exc}"}
+            logger.warning("[Searchie] HTTP error during search: %s", exc)
+            return {"error": f"Searchie connection failed: {exc}"}
 
     def search(self, query: str) -> dict:
         """Synchronous wrapper over search_async using blocking httpx.Client
@@ -1467,14 +1467,14 @@ class SearchEraClient:
                 )
                 resp.raise_for_status()
                 payload = resp.json()
-                logger.info("[SearchEra] Received %d facts for '%s'", len(payload.get("consolidated_facts", [])), query[:80])
+                logger.info("[Searchie] Received %d facts for '%s'", len(payload.get("consolidated_facts", [])), query[:80])
                 return payload
         except httpx.ReadTimeout:
-            logger.error("[SearchEra] Timeout for query: %s", query[:80])
-            return {"error": "SearchEra timed out (180 s). Try a narrower query."}
+            logger.error("[Searchie] Timeout for query: %s", query[:80])
+            return {"error": "Searchie timed out (180 s). Try a narrower query."}
         except Exception as exc:
-            logger.warning("[SearchEra] HTTP error during search: %s", exc)
-            return {"error": f"SearchEra connection failed: {exc}"}
+            logger.warning("[Searchie] HTTP error during search: %s", exc)
+            return {"error": f"Searchie connection failed: {exc}"}
 
 
 class TarotClient:
@@ -2087,7 +2087,7 @@ class SagentCore:
         else:
             self._prompt_char_cap = None
 
-        # --- Tools (OpenAI function defs + SearchEra client) ------------------
+        # --- Tools (OpenAI function defs + Searchie client) ------------------
         raw_tools = tools_cfg  # list from YAML or None
         self._function_defs = _get_function_definition(
             raw_tools, getattr(self, "_mem_tools", None))
@@ -2097,7 +2097,7 @@ class SagentCore:
             for tdef in self._function_defs:
                 fname = tdef["function"]["name"]
                 logger.info("[Core] Registered tool function: %s", fname)
-            self.searchera_client = SearchEraClient()
+            self.searchie_client = SearchieClient()
             self.tarot_client = TarotClient()
 
             # Build dynamic tool listing from registered definitions (not hardcoded text)
@@ -2113,7 +2113,7 @@ class SagentCore:
                 tool_listing_parts.append(f"- **{name}**: {desc}{params_info}")
             self._registered_tool_listing = "\n\n".join(tool_listing_parts) if tool_listing_parts else ""
         else:
-            self.searchera_client = None
+            self.searchie_client = None
             self._registered_tool_listing = ""
             logger.info("[Core] No tools registered; standard chat only.")
 
@@ -2158,7 +2158,7 @@ class SagentCore:
         twice. Each close is wrapped in a try/except so a failure
         on one client doesn't block the others.
 
-        Order: openai first (most likely in flight), then searchera,
+        Order: openai first (most likely in flight), then searchie,
         then tarot.
         """
         if getattr(self, "_closed", False):
@@ -2173,13 +2173,13 @@ class SagentCore:
         except Exception as exc:  # pragma: no cover — best-effort
             logger.warning("[Core] Error closing openai_client: %s", exc)
 
-        # SearchEra
+        # Searchie
         try:
-            sec = getattr(self, "searchera_client", None)
+            sec = getattr(self, "searchie_client", None)
             if sec is not None and hasattr(sec, "aclose"):
                 sec.aclose()
         except Exception as exc:  # pragma: no cover
-            logger.warning("[Core] Error closing searchera_client: %s", exc)
+            logger.warning("[Core] Error closing searchie_client: %s", exc)
 
     def _init_memory(self):
         # §7.6/§7.7: when the producer is off, the mem0 engine has no live
@@ -4704,11 +4704,11 @@ class SagentCore:
                     "The living places for your things: list_notes (your "
                     "notebook), list_essences (your lines of meaning), "
                     "recall_my_experience (your recollections).]")
-        elif name == "search_searchera":
+        elif name == "search_searchie":
             query = arguments.get("query", "")
-            logger.info("[Core] Calling search_searchera('%s')...", query[:100])
+            logger.info("[Core] Calling search_searchie('%s')...", query[:100])
             try:
-                payload = self.searchera_client.search(query)
+                payload = self.searchie_client.search(query)
                 # Build a concise response to feed back into the LLM context
                 facts_raw = payload.get("consolidated_facts", [])
                 links_raw = payload.get("critical_links", [])
@@ -4718,9 +4718,9 @@ class SagentCore:
                     err_msg = (
                         f"No results returned. Error was: {payload.get('error', 'Unknown error')}"
                         if "error" in payload
-                        else "Empty result from SearchEra."
+                        else "Empty result from Searchie."
                     )
-                    logger.warning("[Core] search_searchera failed: %s", err_msg)
+                    logger.warning("[Core] search_searchie failed: %s", err_msg)
                     return err_msg
 
                 result_lines = []
@@ -4735,12 +4735,12 @@ class SagentCore:
                     for i, link in enumerate(links_raw, 1):
                         result_lines.append(f"{i}. {link}")
                     result_lines.append("")
-                    result_lines.append("`See full SearchEra source at http://localhost:21000/health`")
+                    result_lines.append("`See full Searchie source at http://localhost:21000/health`")
 
                 return "\n".join(result_lines)
             except Exception as exc:
-                logger.exception("[Core] Error calling search_searchera: %s", exc)
-                return f"Failed to execute search_searchera: {exc}"
+                logger.exception("[Core] Error calling search_searchie: %s", exc)
+                return f"Failed to execute search_searchie: {exc}"
         elif name == "tarot_draw":
             # Extract seed safely if the model provides one
             raw_seed = arguments.get("seed", None) if isinstance(arguments, dict) else None
