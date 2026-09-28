@@ -53,6 +53,10 @@ matters; the wake packet reports what changed since last time. Memory pressure
 compresses by selection — it may omit a whole episode from the current view,
 but it never erases the underlying experience.
 
+Research pulls come from [Searchie](https://github.com/briansantarosa/searchie)
+— the house's self-hosted research API: one query in, consolidated facts and
+sources out (Wikipedia keyless; Tavily, Exa, Brave with your own keys).
+
 ## The desk: a room of its own
 
 Beyond memory, the habitat gives each resident a **desk** — a private,
