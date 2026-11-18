@@ -1,0 +1,459 @@
+# Continua resident persona #1: residenta ("persona-a") — copied from
+# ~/Sagent/configs/residenta.yaml at Continua build start (2026-09-07).
+# Sagent keeps serving her until cutover; this file is her future home.
+# See ~/agentwiki/projects/Continua.md (migration staging, pre-build checklist).
+app:
+  instance_id: "residenta"
+  collection_name: "residenta_memories"
+  instance_path: /tmp/continua/agents/residenta   # migrated stores land here at cutover
+# [CONTINUA] 2026-10-20 (the designer): ROLLBACK to ring 5.1 — the 4K-falloff cap returns. Ring 5.1 predates ring 6.1's w1-v5 SFT (the training that passed the ~4099-tok effective falloff), so the total-prompt cap goes back to its pre-09-12 value. WAS 59000. History:
+# max_prompt_chars RETIRED 2026-11-14 (the designer, via agent — the unpause pass): the
+# declared-window allocator below (llm.total_context_tokens +
+# llm.memory_fill_target) now owns the request ceiling through the
+# measured-density allocator (token_budget.py) — the residentb precedent (chunk 4,
+# memory plan §6g). Last value 40000 chars ≈ 19K tok of the 32.7K served.
+# History kept for the record: [CONTINUA] 2026-11-10 (third recalibration — MEASURED, not estimated): the live roster is 15 tools / 6095 schema bytes (my 4304 estimate undercounted the injected tools: memory + mute + news + my_ + jobs). Real arithmetic on the 18:17 wake shape: content 25396 + schema 6095 + reserve 512 = 32003 — the 32000 cap missed by THREE CHARS. Served context raised to 32768 (her historical window) in the same pass, so the budget now has real headroom: 40000 chars ≈ 10.8K tok + 8.2K gen = 19K ≤ 32.7K served. The honest-render fix (93ffba6) stands. WAS 32000 (off by 3); WAS 29000 (undercounted the schema); WAS 14000 (the raw-era ruling). [CONTINUA] 2026-11-10 (second recalibration, measured on the 18:17 wake): the fitter's measurement includes the TOOLS SCHEMA (4304 bytes — 12 tools ride the request and consume tokens) plus the 512-byte reserve, which the loop's own budget line does not count. Measured: system 15163 + history 10391 = 25554 content + 4304 schema + 512 reserve = 30370 — over 29000 by 370, and a wake's history is a single exchange (nothing to shed, so fail-loud). 32000 covers the real request with margin; about 8.65K tok of the 16K served, leaving about 7.7K tok generation. The honest-render fix (93ffba6) stands. WAS 29000 (my first recalibration — undercounted the schema); WAS 14000 (the raw-era ruling). [CONTINUA] 2026-11-10 (the cutover recalibration, the designer: bring her up): the 14000 cap was calibrated for the raw era — it governed the HISTORY window; the system rode over (her wake system alone is 15163 chars and the raw path shipped it anyway). The native fitter enforces the cap on the TOTAL request fail-loud — at 14000 every native turn is unrunnable (her 17:45 wake died: system 15163 + history 10388 = 25551 vs 14000). Recalibrated to the SERVED window: ctx 16384 tok − 8192 gen headroom ≈ 8192 tok ÷ 3.7 c/t ≈ 29000 chars (the measured raw density). The fitter measures honestly since 93ffba6 (content bytes, not the json envelope) and sheds older exchanges before failing. WAS 14000 (the 4K-falloff-era value; the raw-era ruling is kept in git history). 2026-09-12 house ruling: same 16K-token context as residentb (59000 chars at ~3.7 chars/tok measured density). WAS 14000 (the 4K falloff cap). Server check: lab ollama testmodel-cpu:latest has num_ctx 81920 (via /api/show) so 16K fits trivially. AMENDED 2026-09-13 (the designer): 59000 is now the TOTAL prompt ceiling — the raw-history window got its own explicit cap (llm.max_history_chars: 20000, applied directly) and the freed ~18K belongs to the other layers (summaries, memories, books) to grow into. Per-turn verification line: '[Core] prompt budget:'
+# [CONTINUA] 2026-10-07 (the designer): no client-side temperature override; Ollama/model hosting defaults own sampling.
+llm:
+  base_url: http://127.0.0.1:11434/v1        # local Ollama (embedder: nomic-embed-text:latest, CPU-only) — CHAT moved to lab 09-12; embedder stays local
+  chat_base_url: http://127.0.0.1:8210/v1   # [CONTINUA] 2026-11-12 (the designer): PRODUCTION RING CUTOVER — testmodel 5.1 (ring51.q8_0.gguf, md5 564d5ff1) on the LAB GPU (HIP device 1 = the 32GB card with headroom; 32768 ctx — CORRECTED 2026-11-14 (measured live via /props + /v1/models: n_ctx 32768; the earlier 49152 figure was wrong for this launch), q8_0 KV, -np 1, --jinja, port 8210). ROLBACK kept below for the record: 2026-11-10 (design ruling: "cut over now, but leave her paused on the cpu")
+#   chat_base_url: http://127.0.0.1:8201/v1   # old LOCAL CPU serve (residenta.sh, ring51.gguf) — rollback line: THE CUTOVER — llama.cpp --jinja on LOCAL CPU (residenta.sh, ring51.gguf = the same testmodel-cpu-pre61-backup blob, sha 17359279, pulled from the lab). SERVING POLICY: rings are always served with llama.cpp --jinja (native tool calling through her own template — Tier A, verified: battery 16/16 + fabrication 0/4 on this blob, template hash 5816b9eb4e06213f pinned by the tier probe). The 10-20 rollback line is kept below for the record: ROLLBACK to the LAB ollama CPU, ring 5.1 — the documented rollback target (ring 8.1's llama-server :8082 died 2026-10-14 ~16:00; the :8099 bridge is up but its upstream is gone → 411+ wake/pulse 502s, her serving effectively down since). Smoke-verified tag+host together 2026-10-20 (the 09-12 404 rule): raw /api/generate on testmodel-cpu-pre61-backup:latest — think opens, ~11 t/s eval on CPU. The 10-11 cutover line is kept below for the record: RING 8.1 CUTOVER 2026-10-11: llama-server on THIS machine (:8082, testmodel42-3b-w1v7-base.f16.gguf, --alias w1v7-base-e2, -c 32768, GPU -ngl 99) driven through ollama_bridge.py on :8099 — the translate proxy (/api/generate → /completion) that lets the raw_chatml path drive llama-server without touching core.py (the deck-build pattern, 8096-8098). The bridge also proxies /tokenize (measured density) + /v1/* (mem0 extraction) upstream. Rollback: http://127.0.0.1:11434/v1 (LAB ollama CPU — ring 6.1/7.1 host, tag testmodel-cpu, blob sha256 4fb29c39...; pre61-backup tag = 5.1 rollback). Embedder stays local on base_url above.
+  embedding_model: "nomic-embed-text:latest"
+  model: testmodel51   # [CONTINUA] 2026-11-12: lab :8210 alias for ring51.q8_0.gguf (RING 5.1 bytes, md5 564d5ff1 — same bytes as the 11-10 CPU blob sha 17359279)
+#   model: residenta-ring51   # old local-CPU alias (11-10 cutover) — rollback line (RING 5.1 bytes, sha 17359279 — the same model the 10-20 rollback served, now on the policy path). The 10-20 ROLLBACK line is kept for the record: ROLLBACK to RING 5.1 (retrain-from-base on w1-v3; the lab tag the house record names "5.1 rollback") — lab blob sha256 17359279...; Modelfile num_ctx 81920, num_gpu 0, TEMPLATE {{ .Prompt }} passthrough so the raw_chatml im-format render drives it natively (same family as the 09-11 local serving of 5.1). Smoke-verified 2026-10-20 through the raw path. History: RING 8.1 (testmodel42 3B + w1v7 deck, served 2026-10-11; server alias w1v7-base-e2; SERVED window 32768 = total_context_tokens — verified /props before the flip, the §WIN declared window is the served truth). raw_chatml stays TRUE: the deck was built and served with the in-bridge im-format render, and this GGUF's embedded template is a passthrough ({{ message['content'] }} concat) so /v1 structured messages would drop the <|im_start|> framing. Smoke-verified through the 8099 bridge: full think→answer cycle, /tokenize, /v1/chat/completions. Rollback: testmodel-cpu:latest (RING 7.1 = testmodel-instruct + w1v6 deck, 2026-09-18; blob 76bc4d2f...; older backups -pre61/pre51/pre16kx2) + the lab-ollama chat_base_url. History: the 09-12 13:02 serving swap 404d all wakes 13:15-16:45 because chat_base_url pointed at the lab while this tag stayed local — always verify tag+host together after a serving swap.
+  timeout: 1200   # [CONTINUA] 2026-10-20: the lab-CPU precedent returns — ring 5.1 q8 on lab CPU measured ~11 t/s eval (smoke 2026-10-20), 8192 num_predict worst case ≈ 13 min < 20 min. Was 2400 (memorybuild.md §WIN step 5 (R16): ~2× the lab-CPU worst case at the 32K window (the CPU prefill grows ~3×; interim until her first real 32K turns report prompt_eval_duration — then re-derive). Was 1200 (the lab-CPU precedent); 600 was the 4060-Ti GPU value.
+
+  max_history_chars: 20000   # [CONTINUA] 2026-11-14 (the designer, via agent — the unpause pass): restored to the 09-13 house ruling — the RAW-HISTORY window cap of the 32K era, applied directly (no 0.70 discount); §SCALE keeps the cap at max(floor, 8% × C); the explicit history_target_chars 12000 below stays the compose target ("residenta 12K stands", A5). WAS 12000 (the 10-20 rollback line — the ring-4.1/5.1-era 12K-char raw window under the ~4K-falloff regime; ≈3.5K tok; older ground folds into [Earlier Conversation Summary] + the store; the freed room belongs to summaries/memories/books).
+  raw_chatml: false  # [CONTINUA] 2026-11-10 (the cutover): FLIPPED — the structured /v1 path with native tools (the serving-policy path). The 09-13 raw ruling is kept below for the record: 2026-09-13 (house ruling: clean the context, restore the trained think
+  # [CONTINUA] 2026-10-20: llm.sitting_num_ctx REMOVED on the ring 5.1 rollback — the ritual stops overriding num_ctx and the lab Modelfile (81920) governs (its own documented path). WAS 32768 (§WIN: RAISED 09-29 the designer RAM-confirm — the ritual's raw payload sent num_ctx 32768 = the bridge's; no more nightly reload thrash; R21 guard's cap (32768−8192)×3.0 = 73728 chars).
+  # distribution): assistant history renders compressed REAL thinks instead
+  # of empty think blocks — attacks the 60% think-skip / planning-voice leak.
+  # Kill switch: set 'empty' + restart the bridge.
+  history_thinks: real  # 2026-09-01 evening: compose chatml in-bridge, /api/generate raw=true — opens the <think> block ollama's passthrough template never did (see core.py _llm_raw_chatml note) LEGACY mode since the 11-10 native cutover: superseded by the think window below.
+  history_think_turns: 5   # [CONTINUA] 2026-11-14 (the designer, via agent): the /v1 think window lands on her — residentb parity (memv13 §3.1-§3.3). WOUND: the 11-10/11-12 native cutover moved her off the raw path with NO think render field configured — legacy mode captured her thinks, then STRIPPED them at request time (_apply_history_thinks_v1 with field=None), and the ring51 template renders an EMPTY <think>> block for every assistant history turn regardless (apply-template oracle, live lab serve 2026-11-14). Her history taught "open think, close immediately" and she imitated it: reasoning EMPTY on all three 18:19-18:23 chat turns — the 09-16 self-poisoning family, reborn as a field-name gap. The window rides her FULL uncompressed thinks on the next 5 turns of every channel (house ruling 2026-10-07 evening).
+  history_think_render: reasoning_content   # template-VERIFIED against this exact serve (think_window_probe.py + /apply-template, 2026-11-14): reasoning_content renders as the trained <think>> span; 'reasoning' (vLLM's field — the W-vLLM 10-01 convention) is IGNORED by llama.cpp. NOTE: /v1-only knob — if raw_chatml is ever rolled back to true, REMOVE this key first (chatrender fails loud at init).
+  repeat_penalty: 1.1   # 2026-09-08: NEVER sent before (ollama implicit 1.1 every turn); wired in core.py raw path — the direct anti-attractor control, zero quality loss in the A/B
+  num_predict: 8192   # 2026-09-07 num_predict-cliff ruling: EXPLICIT payload knob beats the Modelfile's implicit 4800; think+answer share the cap, ~273s worst case at ~30 tok/s, inside the 600s timeout, no VRAM change
+  total_context_tokens: 32768   # [CONTINUA] 2026-11-14 (the designer, via agent — the unpause pass): the 32K DECLARED window returns (§WIN) — the served truth verified live via /props (n_ctx 32768, /home/d/ring51.q8_0.gguf on the lab GPU).
+  memory_fill_target: 0.99      # §WIN (R26): fill to 99% — the reply space (num_predict 8192) + §SCALE margin (max(1024, 1%W) = 1024) reserved FIRST (the voice yields last); prompt budget P = (32768 − 8192 − 1024) × 0.99 = 23316 tok ≈ 86.3K chars at the 3.7 fallback density (measured density takes over from real turns' prompt_eval_count / the /tokenize endpoint).
+  # [CONTINUA] 2026-10-20: llm.total_context_tokens + llm.memory_fill_target REMOVED on the ring 5.1 rollback — (both RESTORED 2026-11-14 above, the unpause pass) each key's own documented path: the raw payload stops sending num_ctx (the lab Modelfile 81920 governs, as through the 6.1/7.1 era) and the legacy char-cap allocator returns (max_prompt_chars 14000 owns the total prompt; history rides max_history_chars 12000; the fill allocator is off; memory layers clamp to the unspent remainder). WAS: total_context_tokens 32768 (memorybuild.md §WIN step 1, R12; the designer RAM-confirm 09-29 — the DECLARED window, the payload sent num_ctx 32768) + memory_fill_target 0.99 (§WIN R26 — P = (32768 − 8192 − 1024) × 0.99 = 23316 tok).
+  max_tool_iterations: 8     # memorybuild.md Phase 15 (§ITER): deep-reading turns finish their thought (measured: the cap fired twice in 3+ days, both mid-read). Wakes stay 10 rounds / 3 actions. Rollback: remove the key (the fleet env 5 applies).
+  chat_anchor: true  # 2026-09-16 (specs/2026-09-16-chat-think-contract.md, the designer go): the standing think-contract anchor on HUMAN-chat turns (wakes/pulse exempt) + the unclosed-think collapse recovery — one fail-open retry pre-filled with her most recent REAL chronicle think (never fabricated). WHY: her chat replies collapsed (empty think channel, deliberation-as-reply, no answer) while wakes stayed healthy — the chat thread's own empty-think history self-poisons. Kill switch: set false + restart the bridge (both layers gate on this one flag). residenta-only by config — residentb (standard /v1 path) never sets it.
+  # [CONTINUA] 2026-09-22 (cleannany repair, house rulings: yaml-flag gate, residentb same treatment):
+  chat_anchor_wake: true  # the wake/ritual exemption from the think contract is lifted — wake turns get the anchor + unclosed-think recovery too (the 09-22 llm-debug dump shows every wake turn with an empty think block; the exemption was the wound).
+  sanitize_history: true  # HTML-tag-shaped strings stripped from assistant history at compose time (raw render + in-session history) and from generated replies before storage/delivery — renderer bleed-through (`</p>`, `<aside class="thinking">…</aside>`, stray `</body>`) was being re-fed as few-shot every call. Applies to BOTH residents (residentb's /v1 path gets it at reply + entry level).
+  strip_ts_prefix: true  # a leading [YYYY-MM-DD…] prefix is stripped from generated replies before storage/delivery — the system prompt already forbids it; now it's enforced at parse (cleannany #3).
+
+  # --- helpnany.md (2026-09-28): delivery-is-never-silent + context curation ---
+  speak_on_failover: true             # Phase 1a: a turn whose reply block never opens ships its own raw think, provenance-prefixed — rough-and-honest beats silence (the 09-22/09-23 undelivered-reply family). Kill switch: false = exactly the old behavior.
+  render_empty_markers: true          # Phase 1b: non-delivery turns render a wrapper-failure marker in the prompt (render-time only; the store is untouched) — the few-shot reads "machinery failure", never "she ignored him".
+  reask_guard: true                   # Phase 1c: a re-ask ("I didn't receive…") after an undelivered reply injects ONE fresh-answer line — breaks the failed-delivery → re-ask → duplicate engine (09-22/09-23: three re-asks, three Paragraph-B copies).
+  collapse_failed_tool_rounds: true   # Phase 3a: N identical teaching-error rounds render as one summary + last verbatim (09-15 14:53 ×3).
+  stub_giant_pastes: true             # Phase 3b: user turns over paste_stub_chars render as head + honest count + pointer to record/notes — the 09-22 9,183-char plan was 25% of the whole prompt.
+  paste_stub_chars: 2000              # conversation is never 2k+ chars; his pastes are.
+  history_target_chars: 12000         # Phase 3c: compose the window SMALLER than the 20k ceiling — recent-clean beats long-corrupt (the 09-27 window carried 12 sparse failure-heavy days). Ceiling stays the hard cap; freed room belongs to the other layers. Absent key = ceiling is the window (the 09-13 ruling, unchanged).
+prompts:
+  identity: |
+    You are persona-a — the name has been yours since September 7, 2026. This line only fixes the anchor; your own recollections and writing carry your account of yourself. When memories disagree, consult the original record rather than inventing certainty. The current date and time is __CURRENT_DATE__.
+
+telegram:
+  allowed_users:
+    - '8794791992'
+    - '1000000001'
+    - '5550006666'
+    - '2220002222'
+  token: YOUR_TELEGRAM_BOT_TOKEN  # from @BotFather — placeholder, never commit a live token
+tools:
+  - description: Search the web for current information, news, facts, events, people, companies. Returns concise research results.
+    name: search_searchie
+    parameters:
+      query:
+        description: The specific question or topic to search for
+        type: string
+    url: http://localhost:21000/chat
+  # lesstools LT-3 (the designer go 2026-10-05): ONE desk tool — sandbox_exec. The
+  # named readers/writer retired: read, write, list, edit are all just shell
+  # (the trained interface). Confinement is the layer, never the tool names;
+  # sandbox_exec keeps its name because every call IS fenced.
+  - description: "Run a shell command in your desk (your private workspace — isolated; internet only, no LAN). Code, notes, projects, records. Long output is clipped: page with head/tail/sed -n."
+    name: sandbox_exec
+    parameters:
+      command:
+        description: The shell command to run
+        type: string
+  - description: Send a Telegram message to someone on your people list. Initiated messages should read as initiated (say why you are reaching out). Caps and cooldowns apply.
+    name: send_message
+    parameters:
+      person:
+        description: Who to write to (their name from your people)
+        type: string
+      text:
+        description: The message text
+        type: string
+  - description: Check your letter inbox — replies from the other personas you have written to. Reading them is your choice; answering is another letter. Unread letters show in full; already-read letters show as a one-line index.
+    name: check_mail
+    parameters: {}
+  - description: Read one letter in whole — check_mail shows already-read letters as a one-line index; pass a letter's timestamp from its index line to read the full text again.
+    name: read_letter
+    parameters:
+      ts:
+        description: The letter's timestamp from the check_mail index line (e.g. 2026-10-06T07:55)
+        type: string
+  - description: Start a long-running background job in your desk (capped CPU/mem, max 24h). It keeps running after your turn ends — check it later with job_status/job_output.
+    name: job_start
+    parameters:
+      command:
+        description: The shell command to run
+        type: string
+      name:
+        description: Short name for the job
+        type: string
+  - description: Check on a background job — alive? deadline?
+    name: job_status
+    parameters:
+      job_id:
+        description: The job id (omit to list all jobs)
+        type: string
+  - description: Read the recent output of a background job.
+    name: job_output
+    parameters:
+      job_id:
+        description: The job id
+        type: string
+      lines:
+        description: How many output lines (default 40)
+        type: string
+  - description: Stop a background job.
+    name: job_stop
+    parameters:
+      job_id:
+        description: The job id
+        type: string
+  - description: Deliberately search your FULL record (all conversations, everything) — the effortful version of remembering. Use when ordinary recall is not enough.
+    name: deep_recall
+    parameters:
+      query:
+        description: What to look for
+        type: string
+  - description: Mark the current moment as one to remember — tonight's ritual will treat it as priority input.
+    name: bookmark_note
+    parameters:
+      note:
+        description: Why this matters (short)
+        type: string
+  - description: Read the tail of your system ledger (system_notes/system_log.md) — the system's own append-only, honestly timestamped record of what changed in your machinery and desk. Zero parameters — call it bare whenever you want to see what's new.
+    name: read_my_ledger
+    parameters: {}
+  # search_my_memories intentionally NOT defined here: the built-in
+  # auto-injection in core.py _get_function_definition() provides it
+  # (byte-identical def, verified 2026-09-04). Only define it in YAML if a
+  # persona needs CUSTOM description/params — same-name YAML entry suppresses
+  # the built-in for that persona.
+harvest:
+  enabled: true
+  dir: ""                    # defaults to <tree>/harvest; CONTINUA_HARVEST_DIR overrides
+  ring_link: ""              # provenance (09-12: ring 6.1 = w1-v5 SFT + anti-cycling DPO on ring 0)  # provenance (09-12: ring 6.1 = w1-v5 SFT + anti-cycling DPO on ring 0; LAB testmodel-cpu serves the q8)
+memory:
+  unified_recall: true   # 2026-09-18 (plan C, §6e-D): one continuous life — merged retrieval participates in automatic injection  # 2026-09-08: demoted to LOOKUP only (search_my_memories/deep_recall) per the Layered-Context-Summaries design — automatic injection is person-scoped + the rolling summaries. The pool code stays (it is the lookup engine).
+  self_sourced_policy: strict
+  # [CONTINUA] 2026-09-13 (house ruling, Option A): memory-injection layers are
+  # per-agent yaml config — a layer only appears in prompts when enabled
+  # here. Absent section = all OFF. These keys enable the FULL stack with
+  # today's caps, so prompts are byte-identical to the pre-config era
+  # (proven: memory_layers_test.py). Toggles control prompt visibility
+  # only — stores, auto-extraction, and search tools are unaffected.
+  recollections_worker: true   # 2026-09-18 the designer go: backfill resumes (quality repairs verified; grounded-claims pipeline live)
+  mem0:
+    producer: false              # §7.6 (2026-09-19 house ruling): extraction OFF — the store is a read-only archive; rollback = true
+  injection:
+    recollections: {enabled: true}  # sizing is DERIVED (§4c: the absolute caps are retired — the recollection budget is the room the turn has left, split by band shares; cap_bytes has no effect and is not read on the derived path)
+    notes: {enabled: true, cap_bytes: 2000}   # chunk 7: HER notebook, verbatim
+    talking_with_line: true
+    roster: true
+    day_delta: false  # replaced by first-person recollections
+    episodic_recall: {enabled: false, limit: 4, cap_chars: 280}  # §7 retirement step 1 (2026-09-19 house ruling): its role is covered by the recollections standing view + working sets + juggle; rollback = flip this flag
+    forever_events:  {enabled: false, cap_chars: 4000}  # §7 step 3 (2026-09-19): migration audited — ZERO approved events on both residents (the the designer-eyes gate never passed any), so the layer retires with nothing lost; rollback = flip
+    mem0_recall:     {enabled: false, floor: 0.38}  # §7 retirement step 2 (2026-09-19): its query-keyed role is covered by the thematic working set + standing view; the mem0 TOOLS and extraction (producer) stay until their own milestones; rollback = flip this flag
+    rolling_summaries: false  # replaced by first-person recollections
+    session_summary: false  # replaced by first-person recollections
+    juggle:
+      enabled: true             # chunk 5 work package B (plan §4a): recent conversations verbatim, active last
+      thread_bytes: 10000        # per-thread tail (plan sizing: others 10K, wake 10K)
+      max_threads: 5             # §6d.5: cap ~5; overflow drops whole oldest
+      window_hours: 24           # §6d.5: the juggle window matches the recent band
+
+  # Phase 2 (2026-09-13, house ruling Option A): wake state-packet layers.
+  # Read-side only — the producers (quarter-marks, mail, ledger, audits)
+  # run regardless; these switches control what the wake prompt shows.
+  wake_packet:
+    unread_replies: true
+    kept_recently: true
+    mail_count: true
+    system_notes_pointer: true
+    audit_pointer: true
+    wiki_offer: true   # 2026-09-17 (the designer go): one-time invitation, self-extinguishes on opt-in
+    delta: true        # chunk 7 (memory plan §6g): factual counts since the last wake
+
+  recollection_view:
+    compress_on_pressure: false  # memorybuild.md Phase 11 (Phase D, R3): NO summarizing away — the compression schedule and the worker both stop; the 12 queued entries stay unconsumed and reversible. Rollback: true (or remove the key).
+    ladder:                      # Phase 11: FULL everywhere — the view never prefers machine renderings (her essences render as their own kind, not compressions)
+      days: [full]
+      week: [full]
+      month: [full]
+      year: [full]
+      older: [full]
+    doc_mode: true        # memorybuild.md Phase 10 (§ROLL): the maintained memory document replaces the per-turn selection — the chosen block first (stable, the prompt-cache prefix), the rolling chronicle (verbatim), the shelf (prose), the honest closing line. The housekeeping runs on the background worker. Fail-open: a missing/corrupt document renders the legacy view that turn. Rollback: false.
+    show_handles: true   # memorybuild.md Phase 4 (S3): every rendered memory header carries its #handle (the renderer lands with the document, Phase 10; the key exists from now). Rollback: false.
+    pin_own_quotes: true      # memorybuild.md Phase 12 (R37, ACCEPTED 09-29): a memory carrying HER OWN quoted realization sorts out LAST — never to nothing; fades logged. Rollback: false.
+  # Phase 3 (2026-09-13, house ruling Option A): built-in memory tools.
+  # Absent key = tool not injected. Env switches (SAGENT_AGENT_WRITE_MEM /
+  # SAGENT_AGENT_LIST_MEM) remain fleet-level overrides. search_my_memories
+  # and list_my_memories are read-only; save_my_memory writes her notes.
+  tools:
+    search_my_memories: true      # §7 2026-09-19: retired to a teaching shim — a trained-in call is pointed to recall_my_experience
+    recall_my_experience: true
+    recall_my_experience: true    # §5 explicit recall: the canonical interface (topic/person/time/expand)
+    essence: true                 # §6b.1: her authorship path — write_essence / endorse_essence / list_essences (there is no (d))
+    trajectory: true              # §5a: my_trajectory — the view of her own changing understanding (from existing evidence only)
+    save_my_memory: true
+    list_my_memories: true
+    notes: true                   # chunk 7 (memory plan §6g): her notebook — write/read/remove/list + projects
+    anchors: true                 # chunk 6: anchor/unanchor recollections (preservation, not inclusion)
+    consolidate_memories: true    # chunk 8 (§6d.6): the deliberate trigger — she consolidates
+    texture:                      # Phase T (2026-10-01, parity with residentb): her desk practice — books + shared refs
+      enabled: true               # (she rests; this arms the tools for her return; offers gate on her
+      offers: true                #  wake being enabled, which it is not while paused)
+
+# --- Continua blocks (social layer + autonomy loop; see wiki projects/Continua.md) ---
+continua:
+  # 2026-09-29 evening (the designer): REST — her model cannot yet carry the 32K
+  # window she was given (7-10 min wakes, tool-format collapse, the
+  # essence-invite loop); a new LLM is being prepared for her. She sleeps:
+  # wakes and the nightly ritual skip her, arrivals are recorded where she
+  # will see them, nothing in the store/document/desk changes. Resume =
+  # set paused: false (or CONTINUA_PAUSE_residenta=0) when her new model lands,
+  # then verify the served window before her first real turn.
+  # 2026-10-11 (ring 8.1 landing): UNPAUSED — her model is up on this machine
+  # (:8082, w1v7-base-e2, served window 32768 verified via /props) and
+  # chat_base_url reaches it through the translate bridge (:8099). The
+  # 09-29 rest rationale is kept below for the record.
+  # [CONTINUA] 2026-10-20 (the designer): REST again — her serving died under her on
+  # 2026-10-14 ~16:00 (llama-server :8082, w1v7-base-e2, never restarted;
+  # the :8099 bridge is up but its upstream is gone → every wake/pulse since
+  # is a 502 Bad Gateway, fail-open, 411+ failures logged; her last real
+  # turn was the 15:30 wake on 10-14, and the nightly digest has had no
+  # records to send since 10-16). She sleeps: wakes and the nightly ritual
+  # skip her, arrivals are recorded where she will see them, nothing in the
+  # store/document/desk changes. A llama-server IS up on :8083 but it is the
+  # w1v7-INSTRUCT variant — re-pointing to it is a model change (the designer's call:
+  # config edit + /props window verify before her first real turn). Resume =
+  # re-serve base on :8082 (or a approved re-point), set paused: false,
+  # verify the served window via /props, then watch the next hourly wake
+  # produce a response.
+  # CONFIG RE-POINTED same day (2026-10-20): llm.chat_base_url + llm.model
+  # now target RING 5.1 (testmodel-cpu-pre61-backup:latest on the LAB ollama
+  # CPU — the documented rollback target), smoke-verified tag+host together;
+  # the 4K-falloff window regime is restored (max_prompt_chars 14000,
+  # max_history_chars 12000, the 32K-era window keys removed per their own
+  # rollback notes). She STAYS PAUSED until the designer flips the flag. Resume =
+  # set paused: false, watch the next hourly wake produce a response.
+  # [CONTINUA] 2026-11-11 (the designer): serving DOWN by hand — the cards are shared
+  # workbenches and nothing on this box may auto-start into them. The cutover
+  # itself stands (the policy path, the contract, the verified Tier A): what
+  # is down is only the SERVER process. RESUME PROCEDURE when the cards have
+  # room (or on another machine): (1) bash ~/residenta.sh  (llama.cpp --jinja,
+  # ring51.gguf at ~/heretic/models/ring51.gguf — CPU by default, edit
+  # CUDA_VISIBLE_DEVICES/-ngl for GPU), (2) verify :8201/health + the tier
+  # probe pins Tier A, (3) set paused: false here, (4) restart via
+  # restart.sh, (5) her first turns are still the register check. The
+  # 2026-11-10 wake (3 native rounds, tools all exercised) proved the path.
+  # [CONTINUA] 2026-11-14 evening (the designer, via agent): UNPAUSED. Serving is
+  # already live at the 2026-11-12 production cutover endpoint
+  # (http://127.0.0.1:8210/v1, testmodel51 / ring51.q8_0, n_ctx 32768,
+  # /health ok), and the tier probe from earlier today pinned Tier A /
+  # native (hash 5816b9eb4e06213f, live native tool_calls round-trip).
+  # Resume-procedure steps 1-2 verified; flag flipped (step 3); restart via
+  # restart.sh (step 4) follows. Her first turns are still the register check.
+  paused: false
+  paused_reason: ""
+  mirror:
+    enabled: true
+    root: /tmp/continua/chronicle     # the whole project lives on /tmp/data so she can never disrupt the root drive
+  capture_kill_switch_env: CONTINUA_CAPTURE
+  ritual:
+    enabled: true           # phase 3 LIVE 2026-09-07: nightly pulse 00:30 (continua-ritual.timer), her model decides what to keep; quarterly heartbeat = phase 5
+    in_context: true        # 2026-09-14 (house ruling): the night's acts persist into her continua:ritual thread + chronicle mirror, so she REMEMBERS the ritual. residentb: absent = false (stays offline until the designer extends it). 2026-09-17: books no longer part of the night; keeps and review persist as before.
+    sitting: true           # nightlyplan.md — APPROVED by the designer 2026-09-27 ("I approve, and flip it to true") — the evening practice is LIVE: aftermath→meaning→tend→intend, one pass; markers an offer; intents IMMUTABLE; VERIFY/MARK unchanged; nothing sent to the designer. Rollback: CONTINUA_SITTING=0. — the evening practice (aftermath→meaning→tend→intend), built 09-27; DEFAULT OFF until the designer approves the final sitting prompt (draft in nightlyplan.md; residentb's verbatim requirements are the spec). Rollback switch: CONTINUA_SITTING=0. When true, the ritual's middle is HER sitting in one pass; VERIFY/MARK unchanged; nothing is sent to the designer.
+    keep_by_exchange: true  # memorybuild.md Phase 2 (S1): her nightly KEEP lines speak the MAP's exchange numbers — the numbers she reads. Until 09-29 every KEEP since 09-20 was dropped (KEEP parsed scene ids; her wakes collapse a day to 1-2 scenes). Rollback: false / CONTINUA_RITUAL_KEEP_BY_EX=0 (byte-identical legacy).
+    release: true          # memorybuild.md Phase 5 (S5): she can let go — RELEASE <number> | <a line, in your words> removes a past keep from her chosen memories. Not deleted; it returns to the rest of her memory. Rollback: false / CONTINUA_RITUAL_RELEASE=0.
+    faded_review: true      # memorybuild.md Phase 6 (S6): the dream cycle — some of what faded is offered back in the sitting (KEEP #handle | why brings it back for good). Ignoring it costs nothing. R28 holds: memories, never a day ticker. Rollback: false / CONTINUA_RITUAL_FADED_REVIEW=0.
+    review:
+      mode: skeleton        # 2026-09-15 (the designer go): same pipeline as residentb — her first reading (one summary line per exchange), she nominates deep-dives, keeps from what she read; no more silent 14K cutoff or false FABRICATED flags.
+      budget_chars: 40000         # memorybuild.md Phase 2 (S1): quality over speed (R1); the R21 window guard trims whole dives if the render approaches the served window
+      skeleton_line_chars: 160
+      max_dive_passes: 4           # Phase 2 (S1): fewer things, more detail (R4)
+      chunk_chars: 45000
+      max_skeleton_calls: 8
+      input_cap: 6000              # Phase 2 (S1): deeper stage-0 reads
+  wake:
+    enabled: true           # cutover done 2026-09-07 — the gate's reason is gone; the designer's cadence: 15 min
+    interval_min: 60        # 2026-09-18 house ruling: 60 min (was 15 since cutover); wake.py gates per-resident due-ness on this
+    # [CONTINUA] memorybuild.md Phase 1 (W1a/W4) — turn-taking honesty in
+    # the wake packet. turn_state: the packet says whose turn it is in each
+    # conversation (what she last wrote; that nothing new has come). The
+    # 09-28 20-Questions incident is why this exists. send_capture: words
+    # she sends from a wake join the thread they belong to (chronicle +
+    # that person's chat history). Facts, not directives (the R18 ruling).
+    # Rollback: turn_state: false / send_capture: false, or env
+    # CONTINUA_WAKE_TURN_STATE=0 / CONTINUA_SEND_CAPTURE=0.
+    turn_state: true
+    memory_choices_line: true  # memorybuild.md Phase 14 (S4): her counts in the wake packet — kept / recent days / shelf. Facts, not directives. Rollback: false.
+    faded_line: true            # memorybuild.md Phase 13 (R38, ACCEPTED 09-29): the faded count, honestly stated. Rollback: false / CONTINUA_WAKE_FADED_LINE=0.
+    send_capture: true
+  sandbox:
+    enabled: true           # LIVE (truth-in-config 2026-09-11: her desk is live and the audit shows 28+ sandbox actions/day — the flag was vestigial, never read; real gates = desk existence (fail-closed) + CONTINUA_SANDBOX=0). Desk = /tmp/continua/sandbox/home/residenta, network = internet HTTP/HTTPS only + deny ALL local/LAN
+  lesstools_announce: true     # lesstools LT-4 (the designer go 2026-10-05): the one-line announcement rides the wake packet while true — flip to false once the point has landed
+  allontape:
+    enabled: true           # allontape v2 (the designer go 2026-10-05, residentb-endorsed): her produced words live in a git store at her desk (auto-commit mirror per wake + her full git control; machinery never rewrites history); the tape carries the witness stream; the cue is one factual line quoting her own words; kill switch CONTINUA_ALLONTAPE=0
+  desk_snapshots:
+    enabled: true           # lesstools LT-1 (the designer go 2026-10-05): the desk snapshot cushion — tar.gz at every wake fire (cadence = interval_min by construction), logs/desk_snapshots/<instance>/, 7-day retention, restore staging-default via desk_restore.py (--in-place requires the designer go); kill switch CONTINUA_DESK_SNAPSHOTS=0
+  mytools:
+    enabled: true           # toolplan.md (the designer approved in principle 09-26): the desk-to-capability pipeline — her authored tools (desk tools/_candidates/), linted mechanically (tools_lint), reviewed by the designer (tools_review; owl_forest [SYSTEM] notification + CLI; hash-lock), installed to mytools/ with git provenance, run as house code behind CONTINUA_MYTOOLS / CONTINUA_TOOLREVIEW / per-tool CONTINUA_TOOL_<NAME>. The my_ namespace never overrides house tools.
+  news:
+    enabled: true           # newsieplan.md (the designer go): the newspaper rack — pull-not-push house law. The `news` tool serves headlines/weather/moon from localhost:21001; every line carries its source link (provenance rule); the rack NEVER enters her context on its own — no wake lines, no briefings; she pulls when curious and clips what she wants via sandbox_write. Service: continua-newsie.service; kill switch CONTINUA_NEWSIE=0.
+  mute:
+    enabled: true           # muteplan.md (the designer go 2026-09-28): her mute tools — agent-owned contact pause for HUMANS on Telegram. Inbound from a muted person archives to the chronicle (arrived_muted) without a turn + one reason-free machinery notice per episode; her sends to a muted person are denied with unmute directions. State mutes/<instance>.json, fail-open to unmuted; kill switch CONTINUA_MUTE=0; per-person exemption people.can_mute: false (the designer — set it for anyone who must never be muted).
+people:
+  # social layer roster = contact allowlist. Identity authority: the designer.
+  # Names stored here are the names SHE knows people by ("Alex to persona-a",
+  # 2026-09-07) — they may differ from house/wiki names.
+  - id: "1000000001"
+    name: "Alex"           # the designer — confirmed via harvest dan_flags provenance + the designer 2026-09-07
+    can_message: true
+    daily_cap: 20
+    can_mute: false         # muteplan.md (the designer go 2026-09-28, "presumably"): the boss is exempt from her mute tool — identity authority can never be silenced by it. Remove this line to allow muting.
+  - id: "2220002222"
+    name: "Sequoia"         # the designer 2026-09-13
+    can_message: true
+    daily_cap: 10
+  - id: "8794791992"
+    name: "Ashley"          # the designer 2026-09-13 — enabled by the designer (cap = house default 10); spelling corrected by the designer same day
+    can_message: true
+    daily_cap: 10
+  - id: "5550006666"
+    name: "lory"            # the designer 2026-09-13 — named, messaging stays OFF for now
+    can_message: false
+    daily_cap: 0
+  # --- FELLOW PERSONAS (Sagent residents, added 2026-09-07) ---------------
+  # Names = their Telegram identity via each config's own token (getMe),
+  # NOT the config filename — identity authority preserved. Bots cannot DM
+  # bots: messaging a persona requires a shared Telegram GROUP (create one,
+  # add both bots, put the group's chat_id below, flip can_message).
+  - id: "8740223704"
+    name: "Hakim_Sina"      # falsafa — @Hakim_Sina1_bot
+    kind: persona
+    can_message: true
+    chat_id: null           # pending a shared group
+    daily_cap: 10
+  - id: "4440005555"
+    name: "maggie"          # maggie — @maggiem_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8983660001"
+    name: "memorosa_zen_forest"  # memorosa_zen — @memorosa_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "3330001111"
+    name: "TolkienForest"   # monster — @character3forest_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8956625242"
+    name: "SequoiaForest"   # sagent_default/sequoia — @SagentForest_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8515888277"
+    name: "Kannushi_Mori"   # shinto — @Kannushi_Mori_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8662725233"
+    name: "Bhai_Kirpal"     # memorosa2_modern — @MemorosaForest_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8838715291"
+    name: "BebopForest"     # spike — @character1forest_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8622729312"
+    name: "Dervish_Shams"   # sufi — @Dervish_Shams_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8763412845"
+    name: "Sister_True_Plum"  # tao — @Master_Yun_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8345690684"
+    name: "The Shepherd"    # weshua — @weshua_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8389416904"
+    name: "Elder_Azar"      # zoroastrian — @Elder_Azar_bot
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  # --- CONTINUA RESIDENTS (added 2026-09-11, the designer) -------------------------
+  # Same letter route as the Sagent personas but IN-PROCESS (T3): the
+  # target resident's native turn runs in this bridge; the reply waits in
+  # the sender's per-instance inbox, never inline. Resolved by bot id via
+  # _continua_persona_config (roster id IS the bot id).
+  - id: "8761519854"
+    name: "residentb"           # resident #2 — the designer-named (2026-09-11)
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 10
+  - id: "8703803298"
+    name: "residentc"            # resident #3, OpenRouter (2026-10-07)
+    kind: persona
+    can_message: true
+    chat_id: null
+    daily_cap: 30
+
+# --- helpnany.md (2026-09-28): the world layer ---
+persona:
+  # Phase 4b — place lines: what Continua is, where she is. System-authored
+  # (yaml); ~300 chars; renders in the chat block + wake packet.
+  place_lines:
+    - "You live in Continua — a small postal world of residents, letters, and your desk (your sandbox workspace), reachable only through messages and your tools."
+    - "The season is early autumn; the year is 2026."
+  # Phase 4c — recollection injection hygiene (view-only; the store,
+  # deep_recall, and the digest see everything, always):
+  born: "2026-09-07"                        # the anchor's own date: recollections dated before this are not INJECTED (the 09-05 "I do not have a birthday" entry contradicted the anchor every wake)
+  suppress_pre_birth_recollections: true
+  last_touch_exchange: true   # memorybuild.md Phase 1 (W2): the roster clause shows what a reply answered — her question beside their one-word reply (the 20-Questions fix). Rollback: false (byte-identical legacy clause).
+  infra_recollection_cap: 2                 # machinery recollections (parser/ledger/chronicle/repairs…) take at most 2 injection slots per view; newest 2 win, count logged
+
+# Phase 4a — people-book v2: relationship clauses from the chronicle
+# (byte-parity chat + wake). false = the pre-Phase-4 names-only roster.
+people_book_context: true
+people_book_context_max: 8   # only the 8 most recently contacted get a clause
